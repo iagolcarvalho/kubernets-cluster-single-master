@@ -12,31 +12,43 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-*"] # exemplo de como listar um nome de AMI - 'aws ec2 describe-images --region us-east-1 --image-ids ami-09e67e426f25ce0d7' https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-images.html
+    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server*"] # exemplo de como listar um nome de AMI - 'aws ec2 describe-images --region us-east-1 --image-ids ami-09e67e426f25ce0d7' https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-images.html
   }
 }
 
 resource "aws_instance" "maquina_master" {
   ami           = "${data.aws_ami.ubuntu.id}"
   instance_type = "t2.medium"
-  key_name      = "Itau_treinamento"
+  associate_public_ip_address = true
+  subnet_id     = "subnet-0b859428d18d09c2f"
+  key_name      = "key-outdev-iago"
   tags = {
-    Name = "maquina-cluster-kubernetes-master"
+    Name = "iago-maquina-cluster-kubernetes-master"
   }
   vpc_security_group_ids = ["${aws_security_group.acessos_master.id}"]
   depends_on = [
     aws_instance.workers,
   ]
+  root_block_device {
+    encrypted   = true
+    volume_size = 8
+  }
 }
 
 resource "aws_instance" "workers" {
   ami           = "${data.aws_ami.ubuntu.id}"
   instance_type = "t2.micro"
-  key_name      = "Itau_treinamento"
+  key_name      = "key-outdev-iago"
+  subnet_id     = "subnet-0b859428d18d09c2f"
   tags = {
-    Name = "maquina-cluster-kubernetes-${count.index}"
+    Name = "iago-maquina-cluster-kubernetes-${count.index}"
   }
   vpc_security_group_ids = ["${aws_security_group.acessos_workers.id}"]
+  root_block_device {
+    encrypted   = true
+    volume_size = 8
+  }
+
   count         = 2
 }
 
@@ -44,33 +56,29 @@ resource "aws_instance" "workers" {
 resource "aws_security_group" "acessos_master" {
   name        = "acessos_master"
   description = "acessos_workers inbound traffic"
-
+  vpc_id = "vpc-01aeb80167e9351f2"
   ingress = [
     {
       description      = "SSH from VPC"
       from_port        = 22
       to_port          = 22
       protocol         = "tcp"
-      cidr_blocks      = ["${chomp(data.http.myip.body)}/32"]
-      ipv6_cidr_blocks = ["::/0"]
-      prefix_list_ids = null,
-      security_groups: null,
-      self: null
+      cidr_blocks      = ["0.0.0.0/0"]
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = [],
+      security_groups  = [],
+      self             = false
     },
     {
       description      = "Libera porta kubernetes"
-      from_port        = 6443
-      to_port          = 6443
+      from_port        = 0
+      to_port          = 65535
       protocol         = "tcp"
-      cidr_blocks      = [
-        "${chomp(data.http.myip.body)}/32",
-        "${aws_instance.workers[0].private_ip}/32",
-        "${aws_instance.workers[1].private_ip}/32",
-      ]
-      ipv6_cidr_blocks = ["::/0"]
-      prefix_list_ids = null,
-      security_groups: null,
-      self: null
+      cidr_blocks      = []
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      security_groups  = []
+      self             = false
     },
   ]
 
@@ -80,16 +88,16 @@ resource "aws_security_group" "acessos_master" {
       to_port          = 0
       protocol         = "-1"
       cidr_blocks      = ["0.0.0.0/0"]
-      ipv6_cidr_blocks = ["::/0"],
-      prefix_list_ids = null,
-      security_groups: null,
-      self: null,
-      description: "Libera dados da rede interna"
+      ipv6_cidr_blocks = ["::/0"]
+      prefix_list_ids  = []
+      security_groups  = []
+      self             = false
+      description      = "Libera dados da rede interna"
     }
   ]
 
   tags = {
-    Name = "acessos_master"
+    Name = "iago_acessos_master_iago"
   }
 }
 
@@ -106,28 +114,28 @@ resource "aws_security_group" "acessos_workers" {
       protocol         = "tcp"
       cidr_blocks      = ["${chomp(data.http.myip.body)}/32"]
       ipv6_cidr_blocks = ["::/0"]
-      prefix_list_ids = null,
-      security_groups: null,
-      self: null
+      prefix_list_ids  = []
+      security_groups  = []
+      self             = false
     },
   ]
 
   egress = [
     {
       from_port        = 0
-      to_port          = 0
-      protocol         = "-1"
+      to_port          = 65535
+      protocol         = "tcp"
       cidr_blocks      = ["0.0.0.0/0"]
       ipv6_cidr_blocks = ["::/0"],
-      prefix_list_ids = null,
-      security_groups: null,
-      self: null,
-      description: "Libera dados da rede interna"
+      prefix_list_ids  = []
+      security_groups  = []
+      self             = false
+      description      = "Libera dados da rede interna"
     }
   ]
 
   tags = {
-    Name = "acessos_workers"
+    Name = "iago_acessos_workers"
   }
 }
 
